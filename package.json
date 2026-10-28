@@ -1,0 +1,13 @@
+{
+  "name": "click-clip",
+  "version": "6.0.0",
+  "description": "click clip!! — 手機 AR 虛實整合對戰：A～Z 編號、拍照建檔、符號界定範圍、1m 點陣座標、10 條命",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

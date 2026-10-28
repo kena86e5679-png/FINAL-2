@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>click clip!! 符號列印</title>
+<style>
+  @page { size: A4; margin: 12mm; }
+  body { margin: 0; font-family: -apple-system, "PingFang TC", "Noto Sans TC", sans-serif; color: #111; background: #fff; }
+  .wrap { max-width: 186mm; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 6px; } p, li { font-size: 13px; line-height: 1.6; }
+  .sheet { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; margin-top: 8mm; }
+  .sym { width: 100%; aspect-ratio: 1; }
+  .lbl { text-align: center; font: 700 14px ui-monospace, Menlo, monospace; margin-top: 2mm; }
+  button { font-size: 15px; padding: 10px 18px; margin-top: 8px; }
+  @media print { .noprint { display: none; } .wrap { padding: 0; } }
+</style></head>
+<body><div class="wrap">
+  <div class="noprint">
+    <h1>列印符號（A4，每頁 4 個）</h1>
+    <p>遊戲用這個符號界定場地與校正位置：</p>
+    <ul>
+      <li><b>S1、S2</b>：放在場地的兩個對角。範圍設定時，兩位被抽中的玩家各站一個。</li>
+      <li><b>其他符號</b>：可以放在場地中任何地方，在「站位校正」畫面用準心對準後按「新增符號錨點」。遊戲中準心掃過符號時，系統會用它校正你的位置。</li>
+      <li>請<b>連同黑色底</b>一起列印（黑底＋白斜線讓鏡頭更容易認出它）。紙張平貼地面、不要反光。建議每個至少 15 cm。</li>
+    </ul>
+    <button onclick="print()">列印</button>
+  </div>
+  <div class="sheet" id="sheet"></div>
+</div>
+<script>
+  const svg = '<svg class="sym" viewBox="0 0 1182 1182"><rect width="1182" height="1182" fill="#000"/><line x1="193" y1="893" x2="632" y2="293" stroke="#fff" stroke-width="14"/><path d="M338 860 L686 386 L890 386 A88 88 0 0 1 978 474 L978 772 A88 88 0 0 1 890 860 Z" fill="#b44122"/></svg>';
+  document.getElementById('sheet').innerHTML = ['S1', 'S2', '錨點', '錨點'].map((t) => `<div>${svg}<div class="lbl">${t}</div></div>`).join('');
+</script>
+</body></html>

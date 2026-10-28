@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>click clip!! 地圖監控</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root { --bg: #050506; --panel: #0e0e10; --line: #222226; --fg: #f2f2ee; --dim: #8a8a90; --red: #e0552d; --cyan: #6effe1; --amber: #ffb86c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: "Rubik", -apple-system, "PingFang TC", "Noto Sans TC", sans-serif; display: flex; height: 100vh; overflow: hidden; }
+  #side { width: 340px; background: var(--panel); border-right: 1px solid var(--line); padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand svg { width: 38px; height: 38px; }
+  .brand b { font-weight: 900; font-size: 20px; letter-spacing: -0.02em; }
+  h2 { font-size: 11px; letter-spacing: 0.2em; color: var(--dim); margin: 0 0 8px; font-weight: 700; }
+  .bar { display: flex; gap: 6px; }
+  .bar input { flex: 1; background: #000; border: 1px solid #2a2a2e; color: #fff; padding: 9px 10px; border-radius: 4px; font: 700 14px ui-monospace, Menlo, monospace; text-transform: uppercase; }
+  .bar button { background: var(--red); color: #fff; border: 0; padding: 0 16px; font-weight: 800; border-radius: 4px; cursor: pointer; transform: skewX(-12deg); }
+  #status { font-size: 12px; color: var(--amber); margin-top: 6px; line-height: 1.5; }
+  .card { background: #151518; border-radius: 6px; padding: 10px; display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+  .card.dead { opacity: 0.45; }
+  .lt { width: 34px; height: 34px; display: grid; place-items: center; font-weight: 900; font-size: 20px; color: #000; transform: skewX(-12deg); border-radius: 3px; flex: none; }
+  .lt span { transform: skewX(12deg); }
+  .info { flex: 1; min-width: 0; font-size: 12px; line-height: 1.55; }
+  .info .n { font-weight: 700; font-size: 13px; }
+  .hp { display: flex; gap: 2px; margin-top: 3px; }
+  .hp i { width: 7px; height: 9px; background: var(--red); transform: skewX(-14deg); }
+  .hp i.off { background: #333; }
+  .thumbs { display: flex; gap: 2px; }
+  .thumbs img { width: 18px; height: 24px; object-fit: cover; border-radius: 2px; }
+  .tag { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 99px; background: #26262b; margin-right: 3px; }
+  .tag.ok { background: rgba(110,255,225,0.16); color: var(--cyan); }
+  #log { font: 11px/1.55 ui-monospace, Menlo, monospace; color: #b8b8c0; max-height: 220px; overflow-y: auto; }
+  #log div.gen { color: var(--cyan); } #log div.out { color: var(--red); } #log div.phase { color: #fff; font-weight: 700; }
+  #mapWrap { flex: 1; position: relative; }
+  #map { width: 100%; height: 100%; display: block; cursor: grab; }
+  #phase { position: absolute; top: 14px; left: 16px; font-weight: 900; font-size: 26px; letter-spacing: 0.02em; text-transform: uppercase; }
+  #phase small { display: block; font-size: 12px; color: var(--dim); font-weight: 500; letter-spacing: 0.04em; text-transform: none; }
+  #legend { position: absolute; right: 14px; bottom: 14px; background: rgba(14,14,16,0.9); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; font-size: 11px; line-height: 1.8; }
+  #legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; }
+  .note { font-size: 11px; color: var(--dim); line-height: 1.6; }
+</style>
+</head>
+<body>
+<div id="side">
+  <div class="brand">
+    <svg viewBox="0 0 1182 1182"><line x1="193" y1="893" x2="632" y2="293" stroke="#fff" stroke-width="40"/><path d="M338 860 L686 386 L890 386 A88 88 0 0 1 978 474 L978 772 A88 88 0 0 1 890 860 Z" fill="#b44122"/></svg>
+    <b>click clip!! 監控</b>
+  </div>
+  <div>
+    <h2>房間</h2>
+    <div class="bar"><input id="room" value="CLIP1" maxlength="16"><button id="go">連線</button></div>
+    <div id="status">尚未連線</div>
+    <div class="note" id="hostNote"></div>
+  </div>
+  <div><h2>玩家</h2><div id="players"><div class="note">等待玩家進房…</div></div></div>
+  <div><h2>範圍與物件</h2><div id="mapInfo" class="note">尚未設定範圍</div></div>
+  <div><h2>事件</h2><div id="log"></div></div>
+</div>
+<div id="mapWrap">
+  <canvas id="map"></canvas>
+  <div id="phase">—<small></small></div>
+  <div id="legend">
+    <div><i style="background:#6effe1"></i>場地邊界 / 已定位座標</div>
+    <div><i style="background:#ffb86c"></i>偵測到的真實牆</div>
+    <div><i style="background:#ff8a3d;height:8px"></i>真實物件（桌椅）</div>
+    <div><i style="background:#c8ccd6;height:8px"></i>生成的虛擬建築</div>
+    <div><i style="background:#e0552d;height:8px;width:8px"></i>符號錨點</div>
+    <div><i style="border-top:2px dashed #6effe1;height:0"></i>玩家走過的範圍</div>
+  </div>
+</div>
+
+<script src="room.js"></script>
+<script src="net.js"></script>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const cv = $('map'), ctx = cv.getContext('2d');
+  const S = { phase: '—', players: {}, map: null, anchors: [], obstacles: [], structures: [], visited: new Set(), setup: null, profiles: {}, traces: {}, shots: [], winner: null };
+  const disp = {};
+  let conn = null, zoom = 1, panX = 0, panY = 0, drag = null, DPR = 1;
+  const PHASE = { lobby: '大廳 · 拍照建檔', setup: '範圍設定', position: '站位校正', play: '對戰中', over: '結束' };
+  const KIND = { block: '阻擋物（桌椅）', cover: '半高掩體', corner_in: '陰角', corner_out: '陽角', column: '柱', wall: '封閉牆面' };
+
+  const q = new URLSearchParams(location.search);
+  if (q.get('room')) $('room').value = q.get('room').toUpperCase();
+
+  function resize() { DPR = Math.min(2, window.devicePixelRatio || 1); cv.width = cv.clientWidth * DPR; cv.height = cv.clientHeight * DPR; }
+  window.addEventListener('resize', resize); resize();
+  cv.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY }; });
+  window.addEventListener('pointerup', () => { drag = null; });
+  window.addEventListener('pointermove', (e) => { if (!drag) return; panX += e.clientX - drag.x; panY += e.clientY - drag.y; drag = { x: e.clientX, y: e.clientY }; });
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); zoom = Math.max(0.3, Math.min(6, zoom * (e.deltaY < 0 ? 1.1 : 0.9))); }, { passive: false });
+
+  function log(msg, kind) {
+    const d = document.createElement('div'); d.className = kind || ''; d.textContent = new Date().toLocaleTimeString().slice(0, 8) + '  ' + msg;
+    $('log').prepend(d); while ($('log').children.length > 80) $('log').lastChild.remove();
+  }
+
+  function connect() {
+    if (conn) conn.close();
+    const room = CC.Net.sanitizeRoom($('room').value);
+    conn = CC.Net.connect({
+      room,
+      onStatus: (s) => {
+        $('status').textContent = s.text;
+        $('hostNote').textContent = s.mode === 'peer-host' ? '這台電腦正在當房間主機：請保持此分頁開著，玩家用相同房間代碼進入即可。' : '';
+        if (s.type === 'open') conn.send({ t: 'hello', role: 'viewer' });
+      },
+      onMessage,
+    });
+  }
+  $('go').addEventListener('click', connect);
+
+  function applyState(st) {
+    S.phase = st.phase; S.map = st.map; S.anchors = st.anchors || []; S.obstacles = st.obstacles || []; S.structures = st.structures || [];
+    S.visited = new Set(st.visited || []); S.setup = st.setup; S.profiles = st.profiles || {}; S.winner = st.winner;
+    S.players = {}; for (const p of st.players) S.players[p.id] = p;
+    if (st.events) { $('log').innerHTML = ''; for (const e of st.events) log(e.msg, e.kind); }
+    renderSide();
+  }
+  function onMessage(m) {
+    if (m.t === 'welcome') applyState(m.state);
+    else if (m.t === 'state') applyState(m);
+    else if (m.t === 'traces') S.traces = m.traces || {};
+    else if (m.t === 'tr') (S.traces[m.id] = S.traces[m.id] || []).push([m.x, m.z]);
+    else if (m.t === 'poses') { for (const r of m.ps) { const p = S.players[r[0]]; if (!p) continue; p.x = r[1]; p.z = r[2]; p.h = r[3]; p.hp = r[4]; p.alive = !!r[5]; p.connected = !!r[6]; p.posQ = r[7]; } renderSide(); }
+    else if (m.t === 'struct') S.structures.push(...m.add);
+    else if (m.t === 'obst') { for (const o of m.up) { const i = S.obstacles.findIndex((q) => q.oid === o.oid); if (i >= 0) S.obstacles[i] = o; else S.obstacles.push(o); } renderSide(); }
+    else if (m.t === 'anchor') S.anchors.push(m.a);
+    else if (m.t === 'located') { S.visited.add(m.gid); log(`${m.id} 定位 ${m.gid}`); }
+    else if (m.t === 'profile') (S.profiles[m.target] = S.profiles[m.target] || []).push({ by: m.by, thumb: m.thumb });
+    else if (m.t === 'shot') { S.shots.push(Object.assign({ at: performance.now() }, m)); if (m.ok) log(`${m.from} → ${m.to} 命中（剩 ${m.hp}）`); }
+    else if (m.t === 'log') log(m.msg, m.kind);
+  }
+
+  function renderSide() {
+    const list = Object.values(S.players).sort((a, b) => a.id.localeCompare(b.id));
+    $('players').innerHTML = list.length ? list.map((p) => {
+      let hp = ''; for (let i = 0; i < 10; i++) hp += `<i class="${i < p.hp ? '' : 'off'}"></i>`;
+      const th = (S.profiles[p.id] || []).slice(-4).map((x) => (x.thumb ? `<img src="${x.thumb}">` : '')).join('');
+      return `<div class="card ${p.alive ? '' : 'dead'}"><div class="lt" style="background:${p.color}"><span>${p.id}</span></div>
+        <div class="info"><div class="n">${esc(p.name)} ${p.connected ? '' : '<span class="tag">離線</span>'}</div>
+        <div>(${(+p.x).toFixed(1)}, ${(+p.z).toFixed(1)}) m · ${((p.h * 180 / Math.PI + 360) % 360).toFixed(0)}° · 淘汰 ${p.kills || 0}</div>
+        <div><span class="tag ${p.calib ? 'ok' : ''}">${p.calib ? '已校正' : '未校正'}</span><span class="tag">${{ corner: '符號', grid: '點陣', anchor: '符號', est: '推算', none: '—' }[p.posQ] || p.posQ}</span>${p.ready ? '<span class="tag ok">準備好</span>' : ''}</div>
+        <div class="hp">${hp}</div></div><div class="thumbs">${th}</div></div>`;
+    }).join('') : '<div class="note">等待玩家進房…</div>';
+    const m = S.map;
+    const counts = {};
+    for (const o of S.obstacles) counts[o.k] = (counts[o.k] || 0) + 1;
+    $('mapInfo').innerHTML = m
+      ? `場地 <b>${m.W} × ${m.D} m</b>（對角線 ${m.diag} m，${m.source === 'aim' ? '瞄準量測' : m.source === 'gps' ? 'GPS' : '手動'}）<br>點陣 ${m.cols} × ${m.rows} = ${m.cols * m.rows} 點，已定位 ${S.visited.size}<br>
+         真實物件：${Object.keys(counts).map((k) => `${KIND[k] || k} ${counts[k]}`).join('、') || '無'}<br>虛擬建築：${new Set(S.structures.map((s) => s.gid)).size} 處（${S.structures.length} 件）`
+      : (S.setup ? `設定中：S1 ${S.setup.a}${S.setup.standA ? ' ✓' : ''}、S2 ${S.setup.b}${S.setup.standB ? ' ✓' : ''}${S.setup.proposal ? `，提案 ${S.setup.proposal.W} × ${S.setup.proposal.D} m` : ''}` : '尚未設定範圍');
+    $('phase').innerHTML = `${PHASE[S.phase] || S.phase}${S.winner ? ' · ' + S.winner + ' 獲勝' : ''}<small>${list.filter((p) => p.connected).length} 人在線</small>`;
+  }
+  const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+  // 軌跡外框（凸包 + 外擴）
+  function hull(pts, pad) {
+    const ex = [];
+    for (const p of pts) for (let a = 0; a < 8; a++) ex.push([p[0] + Math.cos(a * Math.PI / 4) * pad, p[1] + Math.sin(a * Math.PI / 4) * pad]);
+    ex.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], up = [];
+    for (const p of ex) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+    for (let i = ex.length - 1; i >= 0; i--) { const p = ex[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+    up.pop(); lo.pop();
+    return lo.concat(up);
+  }
+
+  function render() {
+    requestAnimationFrame(render);
+    const Wc = cv.width / DPR, Hc = cv.height / DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.fillStyle = '#050506'; ctx.fillRect(0, 0, Wc, Hc);
+    const m = S.map || { W: 10, D: 8, cols: 0, rows: 0 };
+    const base = Math.min((Wc - 120) / (m.W + 2), (Hc - 120) / (m.D + 2));
+    const sc = base * zoom;
+    const ox = Wc / 2 - (m.W / 2) * sc + panX, oz = Hc / 2 - (m.D / 2) * sc + panY;
+    const P = (x, z) => [ox + x * sc, oz + z * sc];
+    // 1 m 細格
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 1;
+    for (let x = Math.floor(-ox / sc) - 1; x < (Wc - ox) / sc + 1; x++) { const a = P(x, 0)[0]; ctx.beginPath(); ctx.moveTo(a, 0); ctx.lineTo(a, Hc); ctx.stroke(); }
+    for (let z = Math.floor(-oz / sc) - 1; z < (Hc - oz) / sc + 1; z++) { const a = P(0, z)[1]; ctx.beginPath(); ctx.moveTo(0, a); ctx.lineTo(Wc, a); ctx.stroke(); }
+    if (S.map) {
+      // 場地
+      const a = P(0, 0);
+      ctx.fillStyle = 'rgba(110,255,225,0.04)'; ctx.fillRect(a[0], a[1], m.W * sc, m.D * sc);
+      ctx.strokeStyle = 'rgba(110,255,225,0.85)'; ctx.lineWidth = 2; ctx.strokeRect(a[0], a[1], m.W * sc, m.D * sc);
+      // 對角線（量測依據）
+      ctx.setLineDash([4, 6]); ctx.strokeStyle = 'rgba(224,85,45,0.5)'; ctx.beginPath(); ctx.moveTo(a[0], a[1]); const b = P(m.W, m.D); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(224,85,45,0.8)'; ctx.font = '600 11px ui-monospace, Menlo, monospace';
+      ctx.fillText(`${m.diag} m`, (a[0] + b[0]) / 2 + 6, (a[1] + b[1]) / 2 - 6);
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.fillText(`${m.W} m`, a[0] + (m.W * sc) / 2 - 14, a[1] - 8);
+      ctx.save(); ctx.translate(a[0] - 8, a[1] + (m.D * sc) / 2 + 14); ctx.rotate(-Math.PI / 2); ctx.fillText(`${m.D} m`, 0, 0); ctx.restore();
+      // 點陣座標
+      for (let j = 0; j < m.rows; j++) for (let i = 0; i < m.cols; i++) {
+        const p = P(i, j), gid = (j + 1) + '-' + (i + 1), v = S.visited.has(gid);
+        ctx.fillStyle = v ? '#6effe1' : 'rgba(255,255,255,0.28)';
+        const r = v ? 4 : 2; ctx.fillRect(p[0] - r, p[1] - r, r * 2, r * 2);
+        if (sc > 34) { ctx.fillStyle = v ? '#6effe1' : 'rgba(255,255,255,0.3)'; ctx.font = '9px ui-monospace, Menlo, monospace'; ctx.fillText(gid, p[0] + 5, p[1] - 4); }
+      }
+    }
+    // 軌跡範圍
+    for (const id in S.traces) {
+      const pts = S.traces[id]; if (!pts || !pts.length) continue;
+      const hh = hull(pts, 0.5); if (hh.length < 3) continue;
+      const col = (S.players[id] && S.players[id].color) || '#6effe1';
+      ctx.save(); ctx.setLineDash([8, 6]); ctx.strokeStyle = col; ctx.globalAlpha = 0.7; ctx.lineWidth = 1.5;
+      ctx.beginPath(); hh.forEach((p, k) => { const q = P(p[0], p[1]); k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }); ctx.closePath(); ctx.stroke(); ctx.restore();
+    }
+    // 真實物件
+    for (const o of S.obstacles) {
+      if (o.k === 'wall') {
+        const a = P(o.x1, o.z1), b = P(o.x2, o.z2);
+        ctx.strokeStyle = o.hits >= 2 ? '#ffb86c' : 'rgba(255,184,108,0.4)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+        continue;
+      }
+      const p = P(o.x, o.z);
+      if (o.k === 'block' || o.k === 'cover') {
+        ctx.fillStyle = o.k === 'block' ? 'rgba(255,138,61,0.75)' : 'rgba(255,200,61,0.6)';
+        ctx.fillRect(p[0] - (o.w * sc) / 2, p[1] - (o.d * sc) / 2, o.w * sc, o.d * sc);
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(p[0] - (o.w * sc) / 2, p[1] - (o.d * sc) / 2, o.w * sc, o.d * sc);
+      } else if (o.k === 'column') { ctx.fillStyle = '#ffb86c'; ctx.beginPath(); ctx.arc(p[0], p[1], Math.max(4, 0.2 * sc), 0, 7); ctx.fill(); }
+      else { ctx.strokeStyle = '#ffb86c'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p[0], p[1], 7, 0, 7); ctx.stroke(); }
+      ctx.fillStyle = 'rgba(255,184,108,0.95)'; ctx.font = '600 10px -apple-system, "PingFang TC", sans-serif';
+      ctx.fillText(KIND[o.k] || o.k, p[0] + 8, p[1] + 3);
+    }
+    // 虛擬建築
+    const now = performance.now();
+    for (const s of S.structures) {
+      const rot = Math.abs(Math.sin(s.rot || 0)) > 0.7;
+      const w = (rot ? s.d : s.w) * sc, d = (rot ? s.w : s.d) * sc, p = P(s.x, s.z);
+      ctx.fillStyle = s.h < 1.5 ? '#8a8f9a' : '#c8ccd6';
+      ctx.fillRect(p[0] - w / 2, p[1] - d / 2, Math.max(2, w), Math.max(2, d));
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(p[0] - w / 2, p[1] - d / 2, Math.max(2, w), Math.max(2, d));
+    }
+    // 符號錨點
+    for (const a of S.anchors) {
+      const p = P(a.x, a.z);
+      ctx.fillStyle = '#e0552d'; ctx.beginPath(); ctx.moveTo(p[0] - 9, p[1] + 7); ctx.lineTo(p[0] - 2, p[1] - 7); ctx.lineTo(p[0] + 9, p[1] - 7); ctx.lineTo(p[0] + 9, p[1] + 7); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = '800 12px ui-monospace, Menlo, monospace'; ctx.fillText(a.aid, p[0] + 12, p[1] + 4);
+    }
+    // 射擊
+    S.shots = S.shots.filter((s) => now - s.at < 700);
+    for (const s of S.shots) {
+      const a = P(s.x, s.z), t = 1 - (now - s.at) / 700;
+      let b;
+      if (s.ok && S.players[s.to]) b = P(S.players[s.to].x, S.players[s.to].z);
+      else b = P(s.x + Math.sin(s.h) * 6, s.z - Math.cos(s.h) * 6);
+      ctx.strokeStyle = s.ok ? `rgba(255,77,77,${t})` : `rgba(255,255,255,${0.4 * t})`; ctx.lineWidth = s.ok ? 3 : 1.5;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    }
+    // 玩家
+    for (const p of Object.values(S.players)) {
+      if (!p.calib && S.phase !== 'play') continue;
+      const dp = disp[p.id] || (disp[p.id] = { x: p.x, z: p.z, h: p.h });
+      dp.x += (p.x - dp.x) * 0.25; dp.z += (p.z - dp.z) * 0.25;
+      let dh = p.h - dp.h; while (dh > Math.PI) dh -= 2 * Math.PI; while (dh < -Math.PI) dh += 2 * Math.PI; dp.h += dh * 0.3;
+      const q = P(dp.x, dp.z), L = 2.0 * sc, half = 27 * Math.PI / 180;
+      ctx.globalAlpha = p.alive ? 1 : 0.35;
+      ctx.fillStyle = p.color + '30';
+      ctx.beginPath(); ctx.moveTo(q[0], q[1]); ctx.lineTo(q[0] + Math.sin(dp.h - half) * L, q[1] - Math.cos(dp.h - half) * L); ctx.lineTo(q[0] + Math.sin(dp.h + half) * L, q[1] - Math.cos(dp.h + half) * L); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = p.color; ctx.save(); ctx.translate(q[0], q[1]); ctx.transform(1, 0, -0.22, 1, 0, 0); ctx.fillRect(-11, -11, 22, 22); ctx.restore();
+      ctx.fillStyle = '#000'; ctx.font = '900 14px "Rubik", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.id, q[0], q[1] + 1);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      for (let i = 0; i < 10; i++) { ctx.fillStyle = i < p.hp ? '#e0552d' : '#333'; ctx.fillRect(q[0] - 15 + i * 3, q[1] + 15, 2, 4); }
+      ctx.globalAlpha = 1;
+    }
+  }
+  render();
+  connect();
+})();
+</script>
+</body>
+</html>

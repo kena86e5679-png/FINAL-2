@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+<title>click clip!!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
+<style>
+  :root {
+    --bg: #000; --fg: #f5f5f2; --dim: rgba(245,245,242,0.55); --line: rgba(255,255,255,0.14);
+    --red: #b44122; --red-hi: #e0552d; --cyan: #6effe1; --glass: rgba(10,10,12,0.78);
+    --font: "Rubik", -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", sans-serif;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden; font-family: var(--font);
+    touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #cam { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  button { font-family: var(--font); }
+  .hidden { display: none !important; }
+
+  /* ---------- 共用按鈕：符號的斜線造型 ---------- */
+  .btn { appearance: none; border: 0; background: var(--fg); color: #000; font-weight: 800; font-size: 15px; letter-spacing: 0.06em;
+    padding: 14px 22px; min-height: 48px; cursor: pointer; transform: skewX(-14deg); border-radius: 4px; transition: transform .12s, background .12s, opacity .12s; }
+  .btn > span { display: inline-block; transform: skewX(14deg); }
+  .btn:active { transform: skewX(-14deg) scale(0.96); }
+  .btn.red { background: var(--red); color: #fff; }
+  .btn.ghost { background: transparent; color: var(--fg); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.7); }
+  .btn.small { padding: 10px 14px; min-height: 40px; font-size: 13px; }
+  .btn:disabled { opacity: 0.3; pointer-events: none; }
+  .btn.ok { background: var(--cyan); color: #000; }
+
+  /* ---------- 封面 ---------- */
+  .scr { position: fixed; inset: 0; z-index: 10; display: none; }
+  .scr.on { display: flex; }
+  #scrCover { flex-direction: column; align-items: center; justify-content: center; background: #000; gap: 6px;
+    padding: calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom)); }
+  #scrCover .sym { width: min(58vw, 280px); aspect-ratio: 1; animation: symIn .9s cubic-bezier(.2,.9,.2,1) both; }
+  #scrCover .sym .slash { stroke-dasharray: 760; stroke-dashoffset: 760; animation: draw .7s .25s ease-out forwards; }
+  #scrCover .sym .shape { transform-origin: 66% 52%; animation: pop .55s .55s cubic-bezier(.2,1.5,.4,1) both; }
+  @keyframes symIn { from { opacity: 0; transform: translateY(14px); } }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes pop { from { opacity: 0; transform: translateX(-30px) scale(.85); } }
+  .logo { font-weight: 900; font-size: clamp(44px, 14vw, 76px); letter-spacing: -0.03em; line-height: 0.95; margin: 4px 0 0; text-transform: lowercase;
+    animation: symIn .8s .5s both; }
+  .logo b { color: var(--red-hi); }
+  .tag { font-size: 12px; letter-spacing: 0.32em; color: var(--dim); margin: 6px 0 34px; animation: symIn .8s .65s both; }
+  #btnCoverStart { font-size: 20px; padding: 18px 54px; animation: symIn .8s .8s both; }
+  .cover-links { position: absolute; bottom: calc(18px + env(safe-area-inset-bottom)); display: flex; gap: 18px; font-size: 12px; }
+  .cover-links a { color: var(--dim); text-decoration: none; letter-spacing: 0.05em; }
+
+  /* ---------- 進房 ---------- */
+  #scrJoin { background: #000; align-items: center; justify-content: center; padding: 24px; }
+  .join-card { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 14px; }
+  .join-card h2 { font-weight: 900; font-size: 30px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 11px; letter-spacing: 0.2em; color: var(--dim); }
+  .field input { background: #111; border: 2px solid #2a2a2a; color: #fff; font: 700 20px var(--font); padding: 12px 14px; border-radius: 6px; outline: none; text-transform: none; }
+  .field input:focus { border-color: var(--red-hi); }
+  .note { font-size: 12px; color: var(--dim); line-height: 1.6; }
+  #joinErr { color: #ff8a6a; font-size: 13px; min-height: 1.2em; }
+
+  /* ---------- 上方狀態列 ---------- */
+  .topbar { position: fixed; left: 0; right: 0; top: 0; z-index: 12; display: flex; align-items: center; gap: 10px;
+    padding: calc(10px + env(safe-area-inset-top)) 12px 10px; pointer-events: none;
+    background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0)); }
+  .badge { width: 52px; height: 52px; display: grid; place-items: center; font-weight: 900; font-size: 32px; color: #000;
+    background: var(--fg); transform: skewX(-12deg); border-radius: 4px; flex: none; }
+  .badge > span { transform: skewX(12deg); }
+  .who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .who .nm { font-weight: 800; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who .st { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hp { display: flex; gap: 3px; margin-top: 3px; }
+  .hp i { width: 9px; height: 12px; background: var(--red-hi); transform: skewX(-14deg); }
+  .hp i.off { background: rgba(255,255,255,0.18); }
+  .topbar .spacer { flex: 1; }
+  #minimap { width: 92px; height: 92px; border-radius: 6px; background: rgba(0,0,0,0.55); box-shadow: inset 0 0 0 1px var(--line); }
+
+  /* ---------- 下方面板 ---------- */
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 12; padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
+    background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.82) 22%, rgba(0,0,0,0.92)); display: flex; flex-direction: column; gap: 12px; }
+  .sheet h3 { margin: 0; font-weight: 900; font-size: 20px; letter-spacing: 0.01em; }
+  .sheet .sub { font-size: 13px; color: var(--dim); line-height: 1.55; margin-top: -6px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .row.end { justify-content: flex-end; }
+  .grow { flex: 1; }
+
+  /* 玩家卡片 */
+  .cards { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; touch-action: pan-x; }
+  .pcard { flex: none; width: 92px; background: rgba(255,255,255,0.06); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; align-items: center; position: relative; }
+  .pcard .l { width: 38px; height: 38px; display: grid; place-items: center; font-weight: 900; font-size: 22px; color: #000; transform: skewX(-12deg); border-radius: 3px; }
+  .pcard .l span { transform: skewX(12deg); }
+  .pcard .n { font-size: 11px; color: var(--dim); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pcard .ph { display: flex; gap: 2px; height: 30px; }
+  .pcard .ph img { height: 30px; width: 22px; object-fit: cover; border-radius: 2px; }
+  .pcard .cnt { font-size: 11px; font-weight: 700; }
+  .pcard.me { box-shadow: inset 0 0 0 2px rgba(255,255,255,0.6); }
+  .pcard .tick { position: absolute; top: 4px; right: 6px; font-size: 12px; color: var(--cyan); font-weight: 900; }
+  .pcard.off { opacity: 0.4; }
+
+  .shutter { width: 74px; height: 74px; border-radius: 50%; border: 5px solid #fff; background: var(--red); flex: none; cursor: pointer; position: relative; }
+  .shutter:active { transform: scale(0.94); }
+  .shutter::after { content: ''; position: absolute; inset: 18px 14px 18px 20px; background: #fff; clip-path: polygon(38% 0, 100% 0, 100% 100%, 0 100%); }
+
+  /* 步驟清單 */
+  .steps { display: flex; flex-direction: column; gap: 8px; }
+  .step { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.45; }
+  .step .k { flex: none; width: 24px; height: 24px; display: grid; place-items: center; font-weight: 900; font-size: 13px; background: rgba(255,255,255,0.12); transform: skewX(-12deg); border-radius: 3px; }
+  .step.done .k { background: var(--cyan); color: #000; }
+  .step.now .k { background: var(--red-hi); color: #fff; }
+  .step.done .t { color: var(--dim); text-decoration: line-through; text-decoration-color: rgba(255,255,255,0.3); }
+  .pill { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; padding: 4px 10px; background: rgba(255,255,255,0.1); border-radius: 99px; }
+  .pill.ok { background: rgba(110,255,225,0.18); color: var(--cyan); }
+  .pill.warn { background: rgba(255,138,106,0.18); color: #ff9c7f; }
+  .bigval { font-weight: 900; font-size: 34px; letter-spacing: -0.02em; }
+  .bigval small { font-size: 14px; color: var(--dim); font-weight: 700; margin-left: 4px; }
+
+  /* 準心上方的即時讀數 */
+  #reticleInfo { position: fixed; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); z-index: 11; font-weight: 800; font-size: 14px;
+    background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
+
+  /* ---------- 遊戲中 HUD ---------- */
+  #hud .sheet { background: none; padding-top: 0; }
+  .hudbtns { display: flex; gap: 8px; justify-content: center; align-items: flex-end; }
+  #gridInfo { font-size: 12px; text-align: center; color: var(--dim); }
+  #gridInfo b { color: var(--cyan); font-size: 15px; }
+  #feed { position: fixed; top: calc(76px + env(safe-area-inset-top)); left: 12px; z-index: 12; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+  #feed div { font-size: 12px; font-weight: 700; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 3px; animation: feedIn .25s ease-out both; }
+  @keyframes feedIn { from { opacity: 0; transform: translateX(-10px); } }
+  #alive { font-weight: 900; font-size: 13px; }
+
+  /* 觀戰、倒數、結算 */
+  #dead { position: fixed; inset: 0; z-index: 13; display: grid; place-items: center; pointer-events: none; }
+  #dead div { text-align: center; background: rgba(0,0,0,0.7); padding: 18px 26px; border-radius: 6px; }
+  #dead h2 { margin: 0; font-weight: 900; font-size: 28px; color: var(--red-hi); }
+  #countdown { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; pointer-events: none; font-weight: 900; font-size: 140px; color: #fff; text-shadow: 0 6px 30px rgba(0,0,0,0.6); }
+  #scrOver { background: rgba(0,0,0,0.88); flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; }
+  #scrOver .winner { font-weight: 900; font-size: 64px; }
+  #scrOver table { border-collapse: collapse; font-size: 14px; }
+  #scrOver td { padding: 6px 12px; border-bottom: 1px solid var(--line); }
+
+  /* 彈窗 */
+  .modal { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,0.75); display: none; align-items: flex-end; justify-content: center; }
+  .modal.on { display: flex; }
+  .modal .box { width: 100%; max-width: 460px; background: #111; border-radius: 14px 14px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; }
+  .modal h3 { margin: 0; font-weight: 900; }
+  .letters { display: flex; flex-wrap: wrap; gap: 10px; }
+  .letters button { width: 58px; height: 58px; border: 0; font-weight: 900; font-size: 28px; transform: skewX(-12deg); border-radius: 4px; cursor: pointer; }
+  .shot-prev { display: flex; gap: 12px; align-items: center; }
+  .shot-prev img { width: 72px; height: 96px; object-fit: cover; border-radius: 4px; background: #222; }
+  #settings label { display: grid; grid-template-columns: 6.5em 1fr 3em; gap: 10px; align-items: center; font-size: 13px; color: var(--dim); }
+  #settings input[type=range] { width: 100%; touch-action: pan-x; }
+  #settings output { text-align: right; color: #fff; }
+
+  #toast { position: fixed; left: 50%; top: calc(14px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 40; display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: 92%; max-width: 420px; }
+  #toast div { background: rgba(20,20,22,0.92); border-left: 4px solid var(--red-hi); padding: 9px 12px; font-size: 13px; font-weight: 600; border-radius: 3px; animation: feedIn .2s both; }
+  #toast div.ok { border-color: var(--cyan); }
+  #dbg { position: fixed; left: 8px; top: calc(80px + env(safe-area-inset-top)); z-index: 50; font: 10px/1.35 ui-monospace, Menlo, monospace; background: rgba(0,0,0,0.6); padding: 6px 8px; white-space: pre; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<video id="cam" playsinline muted autoplay></video>
+
+<!-- ================= 封面 ================= -->
+<section id="scrCover" class="scr on">
+  <svg class="sym" viewBox="0 0 1182 1182" aria-label="click clip 符號">
+    <line class="slash" x1="193" y1="893" x2="632" y2="293" stroke="#fff" stroke-width="10"/>
+    <path class="shape" d="M338 860 L686 386 L890 386 A88 88 0 0 1 978 474 L978 772 A88 88 0 0 1 890 860 Z" fill="#b44122"/>
+  </svg>
+  <h1 class="logo">click clip<b>!!</b></h1>
+  <div class="tag">AR · REAL × VIRTUAL</div>
+  <button id="btnCoverStart" class="btn red"><span>START</span></button>
+  <div class="cover-links">
+    <a href="symbol-print.html" target="_blank">列印符號</a>
+    <a href="dashboard.html" target="_blank">地圖監控</a>
+    <a href="trainer.html" target="_blank">空間訓練</a>
+  </div>
+</section>
+
+<!-- ================= 進房 ================= -->
+<section id="scrJoin" class="scr">
+  <div class="join-card">
+    <h2>進入房間</h2>
+    <div class="field"><label>暱稱</label><input id="inName" maxlength="12" placeholder="你的名字" autocomplete="off"></div>
+    <div class="field"><label>房間代碼</label><input id="inRoom" maxlength="16" placeholder="例如 CLIP1" autocomplete="off" autocapitalize="characters"></div>
+    <div id="joinErr"></div>
+    <button id="btnJoin" class="btn red"><span>進入</span></button>
+    <div class="note">按下「進入」後會詢問相機與動作感測權限，請都允許。同一房間的人輸入相同代碼即可連線。</div>
+  </div>
+</section>
+
+<!-- ================= 上方狀態列（進房後一直在） ================= -->
+<div id="topbar" class="topbar hidden">
+  <div class="badge" id="myBadge"><span id="myLetter">?</span></div>
+  <div class="who">
+    <div class="nm" id="myName">—</div>
+    <div class="st" id="netStatus">連線中…</div>
+    <div class="hp hidden" id="myHp"></div>
+  </div>
+  <div class="spacer"></div>
+  <div id="alive" class="hidden"></div>
+  <canvas id="minimap" class="hidden" width="184" height="184"></canvas>
+</div>
+
+<!-- ================= 大廳：拍照建檔 ================= -->
+<section id="scrLobby" class="scr" style="pointer-events:none">
+  <div class="sheet" style="pointer-events:auto">
+    <h3>拍下其他玩家</h3>
+    <div class="sub">把鏡頭對準另一位玩家（全身最好），按快門，再選他的編號。每位玩家至少要被拍一次，遊戲才認得出誰是誰。</div>
+    <div class="cards" id="lobbyCards"></div>
+    <div class="row">
+      <button class="shutter" id="btnShutter" aria-label="拍照"></button>
+      <div class="grow note" id="lobbyHint">人物偵測模型載入中…</div>
+      <button class="btn red" id="btnStartSetup"><span>設定範圍 →</span></button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 範圍設定 ================= -->
+<section id="scrSetup" class="scr" style="pointer-events:none">
+  <div class="sheet" style="pointer-events:auto" id="setupSheet"></div>
+</section>
+
+<!-- ================= 站位校正 ================= -->
+<section id="scrPos" class="scr" style="pointer-events:none">
+  <div class="sheet" style="pointer-events:auto" id="posSheet"></div>
+</section>
+
+<!-- ================= 遊戲中 ================= -->
+<section id="hud" class="scr" style="pointer-events:none">
+  <div id="feed"></div>
+  <div class="sheet" style="pointer-events:auto">
+    <div id="gridInfo"></div>
+    <div class="hudbtns">
+      <button class="btn small ghost" id="btnRecal"><span>重新校正</span></button>
+      <button class="btn ok" id="btnLocate"><span>定位</span></button>
+      <button class="btn small ghost" id="btnLimit"><span>視野</span></button>
+      <button class="btn small ghost" id="btnSettings"><span>⚙</span></button>
+    </div>
+  </div>
+</section>
+<div id="dead" class="hidden"><div><h2 id="deadTitle">你被淘汰了</h2><div class="note" id="deadSub">觀戰中</div></div></div>
+<div id="countdown" class="hidden"></div>
+<div id="reticleInfo" class="hidden"></div>
+
+<!-- ================= 結算 ================= -->
+<section id="scrOver" class="scr">
+  <div class="note">WINNER</div>
+  <div class="winner" id="overWinner">—</div>
+  <table id="overTable"></table>
+  <div class="row">
+    <button class="btn red" id="btnAgain"><span>再來一局</span></button>
+    <button class="btn ghost" id="btnLobby"><span>回大廳</span></button>
+  </div>
+</section>
+
+<!-- ================= 彈窗 ================= -->
+<div class="modal" id="whoModal">
+  <div class="box">
+    <h3>剛剛拍的是誰？</h3>
+    <div class="shot-prev"><img id="whoImg" alt=""><div class="note" id="whoNote"></div></div>
+    <div class="letters" id="whoLetters"></div>
+    <button class="btn ghost small" id="whoCancel"><span>重拍</span></button>
+  </div>
+</div>
+<div class="modal" id="setModal">
+  <div class="box" id="settings">
+    <h3>設定</h3>
+    <label>相機視角 <input id="sFov" type="range" min="45" max="90" step="1"><output id="oFov"></output></label>
+    <label>步長（公尺） <input id="sStep" type="range" min="0.4" max="1" step="0.05"><output id="oStep"></output></label>
+    <label>中央區大小 <input id="sSize" type="range" min="0.7" max="2" step="0.05"><output id="oSize"></output></label>
+    <label>眼睛高度 <input id="sEye" type="range" min="1.1" max="1.9" step="0.01"><output id="oEye"></output></label>
+    <div class="row">
+      <button class="btn small ghost" id="btnDebug"><span>除錯資訊</span></button>
+      <button class="btn small ghost" id="btnLeave"><span>離開房間</span></button>
+      <div class="grow"></div>
+      <button class="btn small" id="setClose"><span>關閉</span></button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="manualModal">
+  <div class="box">
+    <h3>手動輸入場地尺寸</h3>
+    <div class="note">量不準或只有一個人時使用。S1 在原點，S2 在對角。</div>
+    <div class="row">
+      <div class="field grow"><label>寬（公尺）</label><input id="inW" type="number" min="1" max="100" step="0.1" value="6"></div>
+      <div class="field grow"><label>深（公尺）</label><input id="inD" type="number" min="1" max="100" step="0.1" value="6"></div>
+    </div>
+    <div class="row end">
+      <button class="btn ghost small" id="manualCancel"><span>取消</span></button>
+      <button class="btn red small" id="manualOk"><span>送出</span></button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="dbg" class="hidden"></div>
+
+<script src="room.js"></script>
+<script src="net.js"></script>
+<script src="vision.js"></script>
+<script src="engine.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
