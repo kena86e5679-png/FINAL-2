@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>click clip!! 玩家辨識訓練器</title>
+<style>
+  :root {
+    --bg: #08090c; --panel: #111319; --card: #181c24; --line: #262b38;
+    --fg: #f3f5f8; --dim: #8b93a6; --accent: #6effe1; --red: #ff3b30; --warn: #ffb86c; --ok: #4ade80;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Noto Sans CJK TC", sans-serif;
+    display: flex; min-height: 100vh; font-size: 13px;
+  }
+  #left { flex: 1.3; display: flex; flex-direction: column; border-right: 1px solid var(--line); min-width: 0; }
+  #right { flex: 1; max-width: 460px; background: var(--panel); overflow-y: auto; height: 100vh; }
+  header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0; letter-spacing: .03em; }
+  header .tag { background: var(--red); color: #fff; font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 4px; letter-spacing: .08em; }
+  header a { color: var(--dim); font-size: 12px; margin-left: auto; text-decoration: none; }
+  .bar { display: flex; gap: 6px; padding: 8px 14px; flex-wrap: wrap; border-bottom: 1px solid var(--line); align-items: center; }
+  button, .btn {
+    background: var(--card); color: var(--fg); border: 1px solid var(--line); padding: 8px 12px; border-radius: 8px;
+    font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 4px;
+  }
+  button:hover, .btn:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #041311; border-color: var(--accent); }
+  button.danger { color: var(--red); }
+  button:disabled { opacity: .4; cursor: default; }
+  #status { color: var(--dim); font-size: 11.5px; margin-left: auto; }
+  #stage { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; background: #050608; overflow: hidden; min-height: 300px; }
+  #cv { max-width: 100%; max-height: calc(100vh - 120px); touch-action: none; display: block; }
+  #video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: none; background: #000; }
+  #empty { position: absolute; color: var(--dim); text-align: center; line-height: 1.8; padding: 20px; pointer-events: none; }
+  #shutter { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); width: 64px; height: 64px; border-radius: 50%;
+    border: 4px solid #fff; background: var(--red); display: none; padding: 0; }
+  .hint { color: var(--dim); font-size: 11.5px; padding: 6px 14px; border-top: 1px solid var(--line); line-height: 1.6; }
+
+  section { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  h2 { font-size: 12px; margin: 0 0 8px; color: var(--accent); letter-spacing: .06em; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  h2 .sub { color: var(--dim); font-weight: 400; letter-spacing: 0; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); cursor: pointer; font-size: 12px; }
+  .chip.on { border-color: var(--red); background: rgba(255,59,48,.14); }
+  .row { display: grid; grid-template-columns: 64px 1fr 120px; gap: 8px; align-items: center; margin: 6px 0; }
+  .row .lbl { color: var(--dim); font-size: 12px; }
+  .auto { display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; }
+  .auto small { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sw { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(255,255,255,.25); flex: none; }
+  select, input[type=text] {
+    background: #0b0d12; color: var(--fg); border: 1px solid var(--line); padding: 7px 8px; border-radius: 6px; font-size: 12px; width: 100%; font-family: inherit;
+  }
+  select.changed { border-color: var(--warn); color: var(--warn); }
+  .warn { background: rgba(255,184,108,.09); border: 1px solid rgba(255,184,108,.3); color: var(--warn); border-radius: 6px; padding: 6px 8px; font-size: 11.5px; margin-top: 8px; line-height: 1.6; }
+  .warn:empty { display: none; }
+  .actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .rank { display: grid; grid-template-columns: 30px 1fr 52px; gap: 6px; align-items: center; margin: 4px 0; font-size: 12px; }
+  .rank .letter { font-weight: 800; font-size: 15px; text-align: center; }
+  .rank .barw { height: 8px; background: var(--card); border-radius: 4px; overflow: hidden; }
+  .rank .barw i { display: block; height: 100%; background: var(--accent); }
+  .rank.top .letter { color: var(--red); }
+  .rank small { color: var(--dim); text-align: right; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px; text-align: center; }
+  .stat b { display: block; font-size: 16px; }
+  .stat span { color: var(--dim); font-size: 10.5px; }
+  .muted { color: var(--dim); font-size: 11.5px; line-height: 1.6; }
+  #db { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; margin-top: 8px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 10.5px; position: relative; }
+  .card img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; background: #000; }
+  .card .t { padding: 4px 6px; line-height: 1.45; }
+  .card .t b { font-size: 13px; color: var(--red); }
+  .card .x { position: absolute; top: 3px; right: 3px; background: rgba(0,0,0,.6); border: none; color: #fff; padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+  input[type=file] { display: none; }
+  @media (max-width: 860px) {
+    body { flex-direction: column; }
+    #left { border-right: none; }
+    #right { max-width: none; height: auto; overflow: visible; }
+    #cv { max-height: 62vh; }
+  }
+</style>
+</head>
+<body>
+<div id="left">
+  <header>
+    <span class="tag">CLICK CLIP!!</span>
+    <h1>玩家辨識訓練器</h1>
+    <a href="index.html">← 回遊戲</a>
+  </header>
+  <div class="bar">
+    <label class="btn" for="file">📁 上傳照片</label><input type="file" id="file" accept="image/*">
+    <button id="btnCam">📷 相機</button>
+    <button id="btnSample">🧪 範例照片</button>
+    <button id="btnManual" title="模型抓不到人時，手動放一副骨架再拖曳關節點">✚ 手動骨架</button>
+    <button id="btnRedetect">↻ 重新偵測</button>
+    <label class="muted"><input type="checkbox" id="chkRegions" checked> 顯示取樣區</label>
+    <span id="status">模型載入中…</span>
+  </div>
+  <div id="stage">
+    <canvas id="cv" width="960" height="640"></canvas>
+    <video id="video" playsinline muted autoplay></video>
+    <button id="shutter" aria-label="拍照"></button>
+    <div id="empty">上傳一張有人的照片、打開相機拍照，<br>或按「範例照片」先試試看。</div>
+  </div>
+  <div class="hint">點畫面上的人選取；拖曳白色關節點可以修正骨架（放開後會重新判斷）。紅色框＝上衣取樣區、藍色＝褲子、黃色點＝偵測到的頭髮。</div>
+</div>
+
+<div id="right">
+  <section>
+    <h2>① 偵測到的人 <span class="sub" id="nPersons"></span></h2>
+    <div class="chips" id="persons"><span class="muted">尚無</span></div>
+  </section>
+
+  <section id="secAttrs">
+    <h2>② 特徵判斷與修正 <span class="sub">自動判斷錯了就改下拉選單</span></h2>
+    <div class="row"><span class="lbl">髮長</span><div class="auto" id="aHair">—</div><select id="sHair"></select></div>
+    <div class="row"><span class="lbl">髮色</span><div class="auto" id="aHairC">—</div><select id="sHairC"></select></div>
+    <div class="row"><span class="lbl">上衣</span><div class="auto" id="aTop">—</div><select id="sTop"></select></div>
+    <div class="row"><span class="lbl">褲子</span><div class="auto" id="aPants">—</div><select id="sPants"></select></div>
+    <div class="row"><span class="lbl">玩家字母</span><input type="text" id="inLetter" maxlength="1" placeholder="A～Z（可空白）"><input type="text" id="inName" placeholder="暱稱（可空白）"></div>
+    <div class="warn" id="warn"></div>
+    <div class="actions">
+      <button class="primary" id="btnAdd">✓ 確認並加入資料庫</button>
+      <button id="btnReset">復原自動判斷</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>③ 這是誰？ <span class="sub">外觀相似度 70%＋特徵符合度 30%</span></h2>
+    <div id="rank" class="muted">資料庫裡有填字母的樣本後，這裡會列出最像的玩家。</div>
+  </section>
+
+  <section>
+    <h2>④ 學習狀況</h2>
+    <div class="stats">
+      <div class="stat"><b id="stN">0</b><span>樣本數</span></div>
+      <div class="stat"><b id="stP">0</b><span>已登錄玩家</span></div>
+      <div class="stat"><b id="stC">0</b><span>學到的顏色</span></div>
+    </div>
+    <div class="muted" id="acc" style="margin-top:8px"></div>
+  </section>
+
+  <section>
+    <h2>⑤ 資料庫</h2>
+    <div class="actions" style="margin-top:0">
+      <button id="btnExport">⬇ 匯出 JSON</button>
+      <label class="btn" for="fileImport">⬆ 匯入 JSON</label><input type="file" id="fileImport" accept="application/json,.json">
+      <button class="danger" id="btnClear">清空</button>
+    </div>
+    <div class="muted" style="margin-top:6px">資料存在這台裝置的瀏覽器（localStorage）。換手機或清除瀏覽資料前先匯出。</div>
+    <div id="db"></div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js"></script>
+<script src="vision.js"></script>
+<script src="person-attrs.js"></script>
+<script src="person-trainer.js"></script>
+</body>
+</html>
